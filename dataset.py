@@ -12,6 +12,7 @@ from utils import data_augmentation
 def normalize(data):
     return data/255.
 
+#分割函数：将原图片分割成数个小图像块
 def Im2Patch(img, win, stride=1):
     k = 0
     endc = img.shape[0]
@@ -27,6 +28,7 @@ def Im2Patch(img, win, stride=1):
             k = k + 1
     return Y.reshape([endc, win, win, TotalPatNum])
 
+#数据处理函数：训练数据——多尺度、多增强的小块  测试数据——完整图像
 def prepare_data(data_path, patch_size, stride, aug_times=1):
     # train
     print('process training data')
