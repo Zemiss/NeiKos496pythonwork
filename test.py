@@ -36,6 +36,7 @@ def main():
     files_source.sort()
     # process data
     psnr_test = 0
+    ssim_test = 0
     for f in files_source:
         # image
         Img = cv2.imread(f)
@@ -53,11 +54,14 @@ def main():
         ## if you are using older version of PyTorch, torch.no_grad() may not be supported
         # ISource, INoisy = Variable(ISource.cuda(),volatile=True), Variable(INoisy.cuda(),volatile=True)
         # Out = torch.clamp(INoisy-model(INoisy), 0., 1.)
-        psnr = batch_PSNR(Out, ISource, 1.)
-        psnr_test += psnr
-        print("%s PSNR %f" % (f, psnr))
+        current_psnr = batch_PSNR(Out, ISource, 1.)
+        current_ssim = batch_SSIM(Out, ISource, 1.) # Calculate SSIM
+        psnr_test += current_psnr
+        ssim_test += current_ssim # Accumulate SSIM
+        print("%s PSNR %f SSIM %f" % (f, current_psnr, current_ssim)) # Print both
+    ssim_test /= len(files_source) # Calculate average SSIM
     psnr_test /= len(files_source)
-    print("\nPSNR on test data %f" % psnr_test)
+    print("\nPSNR on test data %f SSIM on test data %f" % (psnr_test, ssim_test)) # Print average PSNR and SSIM
 
 if __name__ == "__main__":
     main()

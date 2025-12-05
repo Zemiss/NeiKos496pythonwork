@@ -84,18 +84,21 @@ def main():
             model.eval()
             out_train = torch.clamp(imgn_train-model(imgn_train), 0., 1.)
             psnr_train = batch_PSNR(out_train, img_train, 1.)
-            print("[epoch %d][%d/%d] loss: %.4f PSNR_train: %.4f" %
-                (epoch+1, i+1, len(loader_train), loss.item(), psnr_train))
+            ssim_train = batch_SSIM(out_train, img_train, 1.)
+            print("[epoch %d][%d/%d] loss: %.4f PSNR_train: %.4f SSIM_train: %.4f" %
+                (epoch+1, i+1, len(loader_train), loss.item(), psnr_train, ssim_train))
             # if you are using older version of PyTorch, you may need to change loss.item() to loss.data[0]
             if step % 10 == 0:
                 # Log the scalar values
                 writer.add_scalar('loss', loss.item(), step)
                 writer.add_scalar('PSNR on training data', psnr_train, step)
+                writer.add_scalar('SSIM on training data', ssim_train, step)
             step += 1
         ## the end of each epoch
         model.eval()
         # validate
         psnr_val = 0
+        ssim_val = 0
         for k in range(len(dataset_val)):
             img_val = torch.unsqueeze(dataset_val[k], 0)
             noise = torch.FloatTensor(img_val.size()).normal_(mean=0, std=opt.val_noiseL/255.)
@@ -103,9 +106,13 @@ def main():
             img_val, imgn_val = Variable(img_val.cuda(), volatile=True), Variable(imgn_val.cuda(), volatile=True)
             out_val = torch.clamp(imgn_val-model(imgn_val), 0., 1.)
             psnr_val += batch_PSNR(out_val, img_val, 1.)
+            ssim_val += batch_SSIM(out_val, img_val, 1.)
         psnr_val /= len(dataset_val)
-        print("\n[epoch %d] PSNR_val: %.4f" % (epoch+1, psnr_val))
+        ssim_val /= len(dataset_val)
+        print("\n[epoch %d] PSNR_val: %.4f SSIM_val: %.4f" % (epoch+1, psnr_val, ssim_val))
+
         writer.add_scalar('PSNR on validation data', psnr_val, epoch)
+        writer.add_scalar('SSIM on validation data', ssim_val, epoch)
         # log the images
         out_train = torch.clamp(imgn_train-model(imgn_train), 0., 1.)
         Img = utils.make_grid(img_train.data, nrow=8, normalize=True, scale_each=True)
