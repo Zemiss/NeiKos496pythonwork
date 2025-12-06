@@ -4,17 +4,19 @@ import torch.nn as nn
 import numpy as np
 # 导入 skimage 库中的峰值信噪比 (PSNR) 计算函数
 from skimage.metrics import peak_signal_noise_ratio as compare_psnr, structural_similarity as compare_ssim
+from torch.nn import init
 
 #初始权重函数
 def weights_init_kaiming(m):
-    classname = m.__class__.__name__
-    if classname.find('Conv') != -1:
-        #nn.init.kaiming_normal(m.weight.data, a=0, mode='fan_in') 已过时
-        nn.init.kaiming_normal_(m.weight.data, a=0, mode='fan_in')
-    elif classname.find('Linear') != -1:
-        nn.init.kaiming_normal_(m.weight.data, a=0, mode='fan_in')
-    elif classname.find('BatchNorm') != -1:
-        m.weight.data.normal_(mean=0, std=math.sqrt(2./9./64.)).clamp_(-0.025,0.025)
+    # 使用 isinstance 来精确判断模块类型，避免对容器模块（如 DoubleConv）错误操作
+    if isinstance(m, nn.Conv2d):
+        init.kaiming_normal_(m.weight.data, a=0, mode='fan_in')
+        if m.bias is not None:
+            init.constant_(m.bias.data, 0.0)
+    elif isinstance(m, nn.Linear):
+        init.kaiming_normal_(m.weight.data, a=0, mode='fan_in')
+    elif isinstance(m, nn.BatchNorm2d):
+        init.normal_(m.weight.data, 1.0, 0.02) # 通常将 weight 初始化为1
         nn.init.constant_(m.bias.data, 0.0)
 
 #PSNR计算函数

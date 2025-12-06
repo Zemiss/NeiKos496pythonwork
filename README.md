@@ -9,6 +9,7 @@
 如何运行
 
 1. 依赖项 
+python 2.9.23
 PyTorch(2.5.1)
 torchvision
 OpenCV for Python
@@ -18,7 +19,7 @@ tensorboardX (PyTorch 的 TensorBoard 可视化工具)
 2.训练 DnCNN-S/B (已知噪声水平的 DnCNN)
 
 conda activate myenv
-cd /home/xie/zzzmypython/DnCNN复现
+cd /home/xie/zzzmypython/DnCNNunet
 
 第一次加上预训练
 --preprocess True 
@@ -30,7 +31,7 @@ nohup python train.py --preprocess False --num_of_layers 17 --mode S --noiseL 25
 
 nohup python train.py --preprocess False --num_of_layers 17 --mode S --noiseL 50 --val_noiseL 50 --outf logs/DnCNN-S-50 > logs/DnCNN-S-50.log 2>&1 &
 
-nohup python train.py --preprocess False --num_of_layers 20 --mode B --val_noiseL 25 --outf logs/DnCNN-B  > logs/DnCNN-B.log 2>&1 &
+nohup python train.py --preprocess True --num_of_layers 20 --mode B --val_noiseL 25 --outf logs/DnCNN-B  > logs/DnCNN-B.log 2>&1 &
 
 测试set68
 python test.py --num_of_layers 17 --logdir logs/DnCNN-S-15 --test_data "Set68" --test_noiseL 15
@@ -40,6 +41,9 @@ python test.py --num_of_layers 17 --logdir logs/DnCNN-S-50 --test_data "Set68" -
 python test.py --num_of_layers 20 --logdir logs/DnCNN-B --test_data "Set68" --test_noiseL 15
 python test.py --num_of_layers 20 --logdir logs/DnCNN-B --test_data "Set68" --test_noiseL 25
 python test.py --num_of_layers 20 --logdir logs/DnCNN-B --test_data "Set68" --test_noiseL 50
+
+python test.py --num_of_layers 20 --logdir logs/DnCNN-B --test_data "Set68" --test_noiseL 75
+python test.py --num_of_layers 20 --logdir logs/DnCNN-B --test_data "Set68" --test_noiseL 100
 
 ### BSD68 平均 PSNR
 |:-----------:|:-------:|:-------:|
@@ -58,14 +62,15 @@ python test.py --num_of_layers 20 --logdir logs/DnCNN-B --test_data "Set68" --te
 |     50      |      26.22      |      26.20      |      26.16      |     26.20       |
 |:-----------:|:---------------:|:---------------:|:---------------:|:---------------:|
 
-|:-----------:|:---------------:|:---------------:|:---------------:|:---------------:|
-| Noise Level | DnCNN-S-1       | DnCNN-B-1       | DnCNN-S-2       | DnCNN-B-2       |
-|:-----------:|:---------------:|:---------------:|:---------------:|:---------------:|
-|     15      |            |            |            |            |
-|     25      |            |            |            |            |
-|     50      |            |            |            |            |
-|:-----------:|:---------------:|:---------------:|:---------------:|:---------------:|
+### BSD68 本次作业修改后的得分(1为使用u-net框架并借鉴了ffdnet)
 
+|:-----------:|:---------------:|:---------------:|
+| Noise Level | DnCNN-B         | DnCNN-B-1       |
+|:-----------:|:---------------:|:---------------:|
+|     50      |      26.20      |       26.11     |            
+|     75      |      17.89      |       24.35     |            
+|    100      |      13.65      |       22.91     |            
+|:-----------:|:---------------:|:---------------:|
 
 ### BSD68 平均 SSIM
 |:-----------:|:---------------:|:---------------:|:---------------:|:---------------:|
@@ -76,13 +81,13 @@ python test.py --num_of_layers 20 --logdir logs/DnCNN-B --test_data "Set68" --te
 |     50      |      0.719      |      0.714      |      0.719      |      0.715      |
 |:-----------:|:---------------:|:---------------:|:---------------:|:---------------:|
 
-|:-----------:|:---------------:|:---------------:|:---------------:|:---------------:|
-| Noise Level | DnCNN-S-1       | DnCNN-B-1       | DnCNN-S-2       | DnCNN-B-2       |
-|:-----------:|:---------------:|:---------------:|:---------------:|:---------------:|
-|     15      |            |            |            |            |
-|     25      |            |            |            |            |
-|     50      |            |            |            |            |
-|:-----------:|:---------------:|:---------------:|:---------------:|:---------------:|
+|:-----------:|:---------------:|:---------------:|
+| Noise Level | DnCNN-B         | DnCNN-B-1       |
+|:-----------:|:---------------:|:---------------:|
+|     50      |      0.715      |       0.713     |            
+|     75      |      0.294      |       0.614     |            
+|    100      |      0.160      |       0.503     |            
+|:-----------:|:---------------:|:---------------:|
 
 测试set12
 python test.py --num_of_layers 17 --logdir logs/DnCNN-S-15 --test_data "Set12" --test_noiseL 15
@@ -92,6 +97,9 @@ python test.py --num_of_layers 17 --logdir logs/DnCNN-S-50 --test_data "Set12" -
 python test.py --num_of_layers 20 --logdir logs/DnCNN-B --test_data "Set12" --test_noiseL 15
 python test.py --num_of_layers 20 --logdir logs/DnCNN-B --test_data "Set12" --test_noiseL 25
 python test.py --num_of_layers 20 --logdir logs/DnCNN-B --test_data "Set12" --test_noiseL 50
+
+python test.py --num_of_layers 20 --logdir logs/DnCNN-B --test_data "Set12" --test_noiseL 75
+python test.py --num_of_layers 20 --logdir logs/DnCNN-B --test_data "Set12" --test_noiseL 100
 
 ### Set12 平均 PSNR
 |:-----------:|:-------:|:-------:|
@@ -110,13 +118,13 @@ python test.py --num_of_layers 20 --logdir logs/DnCNN-B --test_data "Set12" --te
 |     50      |     27.165      |     27.138      |     27.057      |     27.132      |
 |:-----------:|:---------------:|:---------------:|:---------------:|:---------------:|
 
-|:-----------:|:---------------:|:---------------:|:---------------:|:---------------:|
-| Noise Level | DnCNN-S-1       | DnCNN-B-1       | DnCNN-S-2       | DnCNN-B-2       |
-|:-----------:|:---------------:|:---------------:|:---------------:|:---------------:|
-|     15      |            |            |            |            |
-|     25      |            |            |            |            |
-|     50      |            |            |            |            |
-|:-----------:|:---------------:|:---------------:|:---------------:|:---------------:|
+|:-----------:|:---------------:|:---------------:|
+| Noise Level | DnCNN-B         | DnCNN-B-1       |
+|:-----------:|:---------------:|:---------------:|
+|     50      |      27.132     |       26.846    |            
+|     75      |      18.113     |       24.749    |            
+|    100      |      13.895     |       22.996    |            
+|:-----------:|:---------------:|:---------------:|
 
 ### Set12 平均 SSIM
 |:-----------:|:---------------:|:---------------:|:---------------:|:---------------:|
@@ -127,13 +135,14 @@ python test.py --num_of_layers 20 --logdir logs/DnCNN-B --test_data "Set12" --te
 |     50      |     0.779       |     0.773       |     0.779       |     0.777       |
 |:-----------:|:---------------:|:---------------:|:---------------:|:---------------:|
 
-|:-----------:|:---------------:|:---------------:|:---------------:|:---------------:|
-| Noise Level | DnCNN-S-1       | DnCNN-B-1       | DnCNN-S-2       | DnCNN-B-2       |
-|:-----------:|:---------------:|:---------------:|:---------------:|:---------------:|
-|     15      |            |            |            |            |
-|     25      |            |            |            |            |
-|     50      |            |            |            |            |
-|:-----------:|:---------------:|:---------------:|:---------------:|:---------------:|
+
+|:-----------:|:---------------:|:---------------:|
+| Noise Level | DnCNN-B         | DnCNN-B-1       |
+|:-----------:|:---------------:|:---------------:|
+|     50      |      0.777      |      0.765      |            
+|     75      |      0.290      |      0.668      |            
+|    100      |      0.163      |      0.549      |            
+|:-----------:|:---------------:|:---------------:|
 
 tensorboard --logdir=C:\Users\12445\Desktop\DnCNNpytorch\logs\DnCNN-S-15
 tensorboard --logdir=C:\Users\12445\Desktop\DnCNNpytorch\logs\DnCNN-S-25
