@@ -4,17 +4,36 @@
 
 作者的 MATLAB 实现请见此处(https://github.com/cszn/DnCNN).
 
-原代码是使用 PyTorch < 0.4 编写的，本次作业对低版本语法进行了优化使得适应 PyTorch 2.5.1
+原代码是使用 PyTorch < 0.4 编写的，本次作业对低版本语法进行了优化，现已迁移至 Jittor 框架
 
 如何运行
 
 1. 依赖项 
-python 2.9.23
-PyTorch(2.5.1)
-torchvision
-OpenCV for Python
-HDF5 for Python
-tensorboardX (PyTorch 的 TensorBoard 可视化工具)
+
+**基础环境：**
+- Python 3.9+
+- CUDA（用于GPU加速，Jittor会自动管理）
+
+**核心依赖：**
+- Jittor（深度学习框架）
+- NumPy（数组操作）
+- OpenCV (cv2)（图像处理）
+- h5py（HDF5数据文件读写）
+- tensorboardX（训练可视化）
+
+**评估指标库：**
+- scikit-image (skimage)（PSNR和SSIM计算）
+
+**安装命令：**
+```bash
+# 安装 Jittor（根据CUDA版本选择）
+python -m pip install jittor
+# 或指定CUDA版本，例如：
+# python -m pip install jittor-cuda
+
+# 安装其他依赖
+pip install numpy opencv-python h5py tensorboardX scikit-image
+```
 
 2.训练 DnCNN-B (盲去噪的 DnCNN)/已改动
 
