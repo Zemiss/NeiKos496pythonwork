@@ -7,113 +7,132 @@ import torch
 import cv2
 import glob
 import torch.utils.data as udata
+from skimage import io
+from skimage.transform import resize
+
+
 from utils import data_augmentation
 
 def normalize(data):
-    """将图像数据归一化到[0,1]范围"""
     return data/255.
 
-# 图像分块函数：将原始图片切分成多个小图像块（patch）
+# 分割函数：将原图片分割成数个小图像块 (已优化)
 def Im2Patch(img, win, stride=1):
     """
-    参数:
-        img: 输入图像，形状为(C, H, W)
-        win: 图像块的大小
-        stride: 滑动窗口的步长
-    返回:
-        图像块数组，形状为(C, win, win, TotalPatNum)
+    使用 numpy.lib.stride_tricks 高效地从图像中提取 patch
     """
-    k = 0
-    endc = img.shape[0]  # 通道数
-    endw = img.shape[1]  # 图像宽度
-    endh = img.shape[2]  # 图像高度
-    patch = img[:, 0:endw-win+0+1:stride, 0:endh-win+0+1:stride]
-    TotalPatNum = patch.shape[1] * patch.shape[2]  # 总图像块数量
-    Y = np.zeros([endc, win*win,TotalPatNum], np.float32)
-    for i in range(win):
-        for j in range(win):
-            patch = img[:,i:endw-win+i+1:stride,j:endh-win+j+1:stride]
-            Y[:,k,:] = np.array(patch[:]).reshape(endc, TotalPatNum)
-            k = k + 1
-    return Y.reshape([endc, win, win, TotalPatNum])
+    from numpy.lib.stride_tricks import as_strided
+    C, H, W = img.shape
 
-# 数据预处理函数：生成训练和验证数据集（保存为h5文件）
-# 训练数据：多尺度、多增强的小图像块
-# 验证数据：完整图像（不分块）
+    # 计算输出形状
+    out_H = (H - win) // stride + 1
+    out_W = (W - win) // stride + 1
+
+    s_C, s_H, s_W = img.strides
+    # 为新的 patch 数组视图定义 strides
+    new_strides = (s_C, s_H * stride, s_W * stride, s_H, s_W)
+    patches = as_strided(img, shape=(C, out_H, out_W, win, win), strides=new_strides)
+    # 重塑为期望的输出格式: (C, win, win, num_patches)
+    return patches.transpose(0, 3, 4, 1, 2).reshape(C, win, win, -1)
+
+#数据处理函数：训练数据——多尺度、多增强的小块  测试数据——完整图像
 def prepare_data(data_path, patch_size, stride, aug_times=1):
-    # 处理训练数据
+    # train
+
+    # Helper function to ensure image dimensions are divisible by a factor
+    def ensure_divisibility(img_array, factor=16):
+        # img_array can be (H, W, C) or (H, W) or (1, H, W)
+        if img_array.ndim == 3 and img_array.shape[0] == 1: # (1, H, W)
+            H, W = img_array.shape[1], img_array.shape[2]
+            is_chw_format = True
+        else: # (H, W, C) or (H, W)
+            H, W = img_array.shape[0], img_array.shape[1]
+            is_chw_format = False
+
+        new_H = (H // factor) * factor
+        new_W = (W // factor) * factor
+
+        if new_H == 0 or new_W == 0: # Check for zero dimension after cropping
+            raise ValueError(f"Image dimension ({H}x{W}) is too small to be divisible by {factor} and result in non-zero size.")
+
+        if new_H != H or new_W != W:
+            if is_chw_format: # (1, H, W)
+                img_array = img_array[:, :new_H, :new_W]
+            else: # (H, W, C) or (H, W)
+                img_array = img_array[:new_H, :new_W, ...] # Use ... to handle C dimension if present
+        return img_array
+
     print('process training data')
-    scales = [1, 0.9, 0.8, 0.7]  # 多尺度训练，增强模型鲁棒性
+    scales = [1, 0.9, 0.8, 0.7]
     files = glob.glob(os.path.join(data_path, 'train', '*.png'))
     files.sort()
-    h5f = h5py.File('train.h5', 'w')  # 创建h5文件用于存储训练数据
+    h5f = h5py.File('train.h5', 'w')
     train_num = 0
     for i in range(len(files)):
         img = cv2.imread(files[i])
-        h, w, c = img.shape
+        # Original image (H, W, C)
+        # No need to ensure divisibility here, as it will be resized and then processed
         for k in range(len(scales)):
-            # 按不同比例缩放图像
-            Img = cv2.resize(img, (int(h*scales[k]), int(w*scales[k])), interpolation=cv2.INTER_CUBIC)
-            Img = np.expand_dims(Img[:,:,0].copy(), 0)  # 只取第一个通道（灰度图）
-            Img = np.float32(normalize(Img))  # 归一化到[0,1]
-            patches = Im2Patch(Img, win=patch_size, stride=stride)  # 切分成小块
+            # Resize first, then ensure divisibility
+            resized_img = cv2.resize(img, (int(img.shape[1]*scales[k]), int(img.shape[0]*scales[k])), interpolation=cv2.INTER_CUBIC)
+            processed_img = ensure_divisibility(resized_img, factor=16) # Ensure (H, W, C) is divisible
+            processed_img = np.float32(normalize(np.expand_dims(processed_img[:,:,0], 0))) # Convert to (1, H, W) and normalize
+            patches = Im2Patch(processed_img, win=patch_size, stride=stride)
             print("file: %s scale %.1f # samples: %d" % (files[i], scales[k], patches.shape[3]*aug_times))
             for n in range(patches.shape[3]):
                 data = patches[:,:,:,n].copy()
-                h5f.create_dataset(str(train_num), data=data)  # 存储原始图像块
+                h5f.create_dataset(str(train_num), data=data)
                 train_num += 1
-                # 数据增强：旋转、翻转等
                 for m in range(aug_times-1):
                     data_aug = data_augmentation(data, np.random.randint(1,8))
                     h5f.create_dataset(str(train_num)+"_aug_%d" % (m+1), data=data_aug)
                     train_num += 1
     h5f.close()
-    # 处理验证数据
+    # val
     print('\nprocess validation data')
     files.clear()
     files = glob.glob(os.path.join(data_path, 'Set12', '*.png'))
     files.sort()
-    h5f = h5py.File('val.h5', 'w')  # 创建h5文件用于存储验证数据
+    h5f = h5py.File('val.h5', 'w')
     val_num = 0
     for i in range(len(files)):
         print("file: %s" % files[i])
-        img = cv2.imread(files[i])
-        img = np.expand_dims(img[:,:,0], 0)  # 只取第一个通道（灰度图）
-        img = np.float32(normalize(img))  # 归一化到[0,1]
-        h5f.create_dataset(str(val_num), data=img)  # 存储完整图像（不切分）
+
+        img = cv2.imread(files[i]) # (H, W, C)
+        processed_img = ensure_divisibility(img, factor=16) # Ensure (H, W, C) is divisible
+        processed_img = np.float32(normalize(np.expand_dims(processed_img[:,:,0], 0))) # Convert to (1, H, W) and normalize
+        h5f.create_dataset(str(val_num), data=processed_img)
         val_num += 1
     h5f.close()
     print('training set, # samples %d\n' % train_num)
     print('val set, # samples %d\n' % val_num)
 
-# 自定义数据集类，用于加载h5文件中的数据
 class Dataset(udata.Dataset):
     def __init__(self, train=True):
-        """
-        参数:
-            train: True表示加载训练集，False表示加载验证集
-        """
         super(Dataset, self).__init__()
         self.train = train
+        self.h5f = None  # 文件句柄将在 __getitem__ 中为每个 worker 初始化，以保证多进程安全
         if self.train:
-            h5f = h5py.File('train.h5', 'r')
+            self.h5_path = 'train.h5'
         else:
-            h5f = h5py.File('val.h5', 'r')
-        self.keys = list(h5f.keys())  # 获取所有数据集的键
-        random.shuffle(self.keys)  # 随机打乱数据
-        h5f.close()
-    
+            self.h5_path = 'val.h5'
+        
+        # 在初始化时一次性读取所有 keys
+        with h5py.File(self.h5_path, 'r') as h5f:
+            self.keys = list(h5f.keys())
+            random.shuffle(self.keys)
+
     def __len__(self):
-        """返回数据集大小"""
         return len(self.keys)
-    
+
     def __getitem__(self, index):
-        """根据索引获取数据"""
-        if self.train:
-            h5f = h5py.File('train.h5', 'r')
-        else:
-            h5f = h5py.File('val.h5', 'r')
+        # 在多进程数据加载 (num_workers > 0) 场景下，__init__ 在主进程中调用，
+        # 而 __getitem__ 在 worker 进程中调用。h5py 文件对象不可序列化 (pickle)，
+        # 因此不能在 __init__ 中打开并在 __getitem__ 中使用。
+        # 常见的模式是在 worker 进程中首次调用时打开文件，并缓存文件句柄。
+        if self.h5f is None:
+            self.h5f = h5py.File(self.h5_path, 'r')
+
         key = self.keys[index]
-        data = np.array(h5f[key])
-        h5f.close()
+        data = np.array(self.h5f[key])
         return torch.Tensor(data)
