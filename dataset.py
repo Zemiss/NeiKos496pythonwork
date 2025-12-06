@@ -3,10 +3,10 @@ import os.path
 import numpy as np
 import random
 import h5py
-import torch
+import jittor as jt
 import cv2
 import glob
-import torch.utils.data as udata
+from jittor.dataset import Dataset as JtDataset
 from skimage import io
 from skimage.transform import resize
 
@@ -107,7 +107,7 @@ def prepare_data(data_path, patch_size, stride, aug_times=1):
     print('training set, # samples %d\n' % train_num)
     print('val set, # samples %d\n' % val_num)
 
-class Dataset(udata.Dataset):
+class Dataset(JtDataset):
     def __init__(self, train=True):
         super(Dataset, self).__init__()
         self.train = train
@@ -135,4 +135,4 @@ class Dataset(udata.Dataset):
 
         key = self.keys[index]
         data = np.array(self.h5f[key])
-        return torch.Tensor(data)
+        return jt.array(data)

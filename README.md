@@ -31,7 +31,6 @@ nohup python train.py --preprocess True --num_of_layers 20 --mode B --val_noiseL
 python test.py --num_of_layers 20 --logdir logs/DnCNN-B --test_data "Set68" --test_noiseL 15
 python test.py --num_of_layers 20 --logdir logs/DnCNN-B --test_data "Set68" --test_noiseL 25
 python test.py --num_of_layers 20 --logdir logs/DnCNN-B --test_data "Set68" --test_noiseL 50
-
 python test.py --num_of_layers 20 --logdir logs/DnCNN-B --test_data "Set68" --test_noiseL 75
 python test.py --num_of_layers 20 --logdir logs/DnCNN-B --test_data "Set68" --test_noiseL 100
 ```
@@ -52,13 +51,13 @@ python test.py --num_of_layers 20 --logdir logs/DnCNN-B --test_data "Set68" --te
 |     50      |      26.22      |      26.20      |      26.16      |     26.20       |
 
 
-### BSD68 本次作业修改后的得分（1为参考FFDNet且使用U-net框架，2为1的基础上加入注意力机制）
+### BSD68 本次作业修改后的得分（1为参考FFDNet且使用U-net框架）
 
-| Noise Level | DnCNN-B         | DnCNN-B-1       |
-|:-----------:|:---------------:|:---------------:|
-|     50      |      26.20      |       26.11     |            
-|     75      |      17.89      |       24.35     |            
-|    100      |      13.65      |       22.91     |            
+| Noise Level | DnCNN-B         | DnCNN-B-1       | DnCNN-B-jittor  |
+|:-----------:|:---------------:|:---------------:|:---------------:|
+|     50      |      26.20      |       26.11     |        26.11    |
+|     75      |      17.89      |       24.35     |        24.47    |
+|    100      |      13.65      |       22.91     |        22.95    |
 
 ### BSD68 平均 SSIM
 
@@ -69,11 +68,12 @@ python test.py --num_of_layers 20 --logdir logs/DnCNN-B --test_data "Set68" --te
 |     50      |      0.719      |      0.714      |      0.719      |      0.715      |
 
 
-| Noise Level | DnCNN-B         | DnCNN-B-1       |
-|:-----------:|:---------------:|:---------------:|
-|     50      |      0.715      |       0.713     |            
-|     75      |      0.294      |       0.614     |            
-|    100      |      0.160      |       0.503     |            
+| Noise Level | DnCNN-B         | DnCNN-B-1       | DnCNN-B-jittor  |
+|:-----------:|:---------------:|:---------------:|:---------------:|
+|     50      |      0.715      |       0.713     |       0.708     |
+|     75      |      0.294      |       0.614     |       0.621     |
+|    100      |      0.160      |       0.503     |       0.508     |
+  
 
 
 测试set12
@@ -103,8 +103,7 @@ python test.py --num_of_layers 20 --logdir logs/DnCNN-B --test_data "Set12" --te
 |     25      |     30.404      |     30.344      |     30.349      |     30.376      |
 |     50      |     27.165      |     27.138      |     27.057      |     27.132      |
 
-### Set12 本次作业修改后的得分（1为参考FFDNet且使用U-net框架，2为1的基础上加入注意力机制）
-
+### Set12 本次作业修改后的得分（1为参考FFDNet且使用U-net框架）
 
 | Noise Level | DnCNN-B         | DnCNN-B-1       |
 |:-----------:|:---------------:|:---------------:|

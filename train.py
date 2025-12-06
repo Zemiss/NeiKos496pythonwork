@@ -1,19 +1,18 @@
 import os
 import argparse
 import numpy as np
-import torch
-import torch.nn as nn
-import torch.optim as optim
-import torchvision.utils as utils
-from torch.autograd import Variable
-from torch.utils.data import DataLoader
+import jittor as jt
+from jittor import nn
+from jittor import optim
+from jittor.dataset import DataLoader
 from tensorboardX import SummaryWriter #
 from models import UNet
 from dataset import prepare_data, Dataset
 from utils import *
+import jittor.transform as transform
 
-os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+# Jittor自动管理GPU，无需手动设置CUDA环境变量
+jt.flags.use_cuda = 1  # 启用GPU
 
 parser = argparse.ArgumentParser(description="DnCNN")
 def str2bool(v):
@@ -44,16 +43,22 @@ def main():
     print('Loading dataset ...\n')
     dataset_train = Dataset(train=True)
     dataset_val = Dataset(train=False)
-    loader_train = DataLoader(dataset=dataset_train, num_workers=4, batch_size=opt.batchSize, shuffle=True)
+    # drop_last=False 确保处理所有数据，即使最后一个批次不完整。
+    loader_train = DataLoader(dataset=dataset_train, num_workers=4, batch_size=opt.batchSize, shuffle=True, drop_last=False)
+    # 验证集图像大小不同，批大小必须为1
+    loader_val = DataLoader(dataset=dataset_val, num_workers=4, batch_size=1, shuffle=False, drop_last=False)
+    # 使用向上取整除法，以在 drop_last=False 时获得正确的批次数。
+    num_batches_train = (len(dataset_train) + opt.batchSize - 1) // opt.batchSize
+    # 当批大小为1时，批次数等于样本数
+    num_batches_val = len(dataset_val)
+
     print("# of training samples: %d\n" % int(len(dataset_train)))
     # Build model
     net = UNet(channels=1)
     net.apply(weights_init_kaiming)
-    criterion = nn.MSELoss(reduction='sum')
-    # Move to GPU
-    device_ids = [0]
-    model = nn.DataParallel(net, device_ids=device_ids).cuda()
-    criterion.cuda()
+    criterion = nn.MSELoss()  # Jittor默认为sum reduction
+    # Jittor自动管理GPU，无需手动移动模型
+    model = net
     # Optimizer
     optimizer = optim.Adam(model.parameters(), lr=opt.lr)
     # training
@@ -73,42 +78,37 @@ def main():
         for i, data in enumerate(loader_train, 0):
             # training step
             model.train()
-            model.zero_grad()
             optimizer.zero_grad()
             img_train = data
             
             # 生成噪声和对应的噪声水平图
-            noise_map = torch.zeros(img_train.size())
+            noise_map = jt.zeros(img_train.shape)
             if opt.mode == 'S':
-                noise = torch.FloatTensor(img_train.size()).normal_(mean=0, std=opt.noiseL/255.)
-                noise_map.fill_(opt.noiseL/255.)
+                noise = jt.randn(img_train.shape) * (opt.noiseL/255.)
+                noise_map = jt.full_like(img_train, opt.noiseL/255.)
             if opt.mode == 'B':
-                noise = torch.zeros(img_train.size())
-                stdN = np.random.uniform(noiseL_B[0], noiseL_B[1], size=noise.size()[0])
-                for n in range(noise.size()[0]):
-                    sizeN = noise[0,:,:,:].size()
+                noise = jt.zeros(img_train.shape)
+                stdN = np.random.uniform(noiseL_B[0], noiseL_B[1], size=noise.shape[0])
+                for n in range(noise.shape[0]):
+                    sizeN = noise[0,:,:,:].shape
                     noise_std = stdN[n]/255.
-                    noise[n,:,:,:] = torch.FloatTensor(sizeN).normal_(mean=0, std=noise_std)
-                    noise_map[n,:,:,:].fill_(noise_std)
+                    noise[n,:,:,:] = jt.randn(sizeN) * noise_std
+                    noise_map[n,:,:,:] = noise_std
 
             imgn_train = img_train + noise
-            model_input = torch.cat((imgn_train, noise_map), 1)
+            model_input = jt.concat([imgn_train, noise_map], dim=1)
 
-            img_train, imgn_train = img_train.cuda(), imgn_train.cuda()
-            noise = noise.cuda()
-            model_input = model_input.cuda()
-            out_train = model(model_input)
-            loss = criterion(out_train, noise) / (imgn_train.size()[0]*2)
-            loss.backward()
-            optimizer.step()
-            # results
-            model.eval()
-            with torch.no_grad():
-                out_train = torch.clamp(imgn_train-model(model_input), 0., 1.)
-                psnr_train = batch_PSNR(out_train, img_train, 1.)
-                ssim_train = batch_SSIM(out_train, img_train, 1.)
+            # Jittor自动管理GPU，无需手动移动张量
+            predicted_noise = model(model_input)
+            loss = criterion(predicted_noise, noise) / (imgn_train.shape[0]*2)
+            optimizer.step(loss)
+            
+            # results - 使用同一次前向传播的结果计算指标，避免重复计算
+            out_train = jt.clamp(imgn_train - predicted_noise, 0., 1.)
+            psnr_train = batch_PSNR(out_train, img_train, 1.)
+            ssim_train = batch_SSIM(out_train, img_train, 1.)
             print("[epoch %d][%d/%d] loss: %.4f PSNR_train: %.4f SSIM_train: %.4f" %
-                (epoch+1, i+1, len(loader_train), loss.item(), psnr_train, ssim_train))
+                (epoch+1, i+1, num_batches_train, loss.item(), psnr_train, ssim_train))
             # if you are using older version of PyTorch, you may need to change loss.item() to loss.data[0]
             if step % 10 == 0:
                 # Log the scalar values
@@ -121,37 +121,28 @@ def main():
         # validate
         psnr_val = 0
         ssim_val = 0
-        with torch.no_grad():
-            for k in range(len(dataset_val)):
-                img_val = torch.unsqueeze(dataset_val[k], 0)
-                noise = torch.FloatTensor(img_val.size()).normal_(mean=0, std=opt.val_noiseL/255.)
+        # 使用 DataLoader 和 no_grad() 进行高效验证
+        with jt.no_grad():
+            for i, img_val in enumerate(loader_val):
+                noise = jt.randn(img_val.shape) * (opt.val_noiseL/255.)
                 imgn_val = img_val + noise
                 # 为验证集创建噪声图和模型输入
-                noise_map_val = torch.FloatTensor(img_val.size()).fill_(opt.val_noiseL/255.)
-                model_input_val = torch.cat((imgn_val, noise_map_val), 1)
+                noise_map_val = jt.full_like(img_val, opt.val_noiseL/255.)
+                model_input_val = jt.concat([imgn_val, noise_map_val], dim=1)
 
-                img_val, imgn_val = img_val.cuda(), imgn_val.cuda()
-                model_input_val = model_input_val.cuda()
-                out_val = torch.clamp(imgn_val-model(model_input_val), 0., 1.)
+                # Jittor自动管理GPU
+                predicted_noise_val = model(model_input_val)
+                out_val = jt.clamp(imgn_val - predicted_noise_val, 0., 1.)
                 psnr_val += batch_PSNR(out_val, img_val, 1.)
                 ssim_val += batch_SSIM(out_val, img_val, 1.)
-        psnr_val /= len(dataset_val)
-        ssim_val /= len(dataset_val)
+        psnr_val /= num_batches_val
+        ssim_val /= num_batches_val
         print("\n[epoch %d] PSNR_val: %.4f SSIM_val: %.4f" % (epoch+1, psnr_val, ssim_val))
 
         writer.add_scalar('PSNR on validation data', psnr_val, epoch)
         writer.add_scalar('SSIM on validation data', ssim_val, epoch)
-        # log the images
-        with torch.no_grad():
-            out_train = torch.clamp(imgn_train-model(model_input), 0., 1.)
-        Img = utils.make_grid(img_train.data, nrow=8, normalize=True, scale_each=True)
-        Imgn = utils.make_grid(imgn_train.data, nrow=8, normalize=True, scale_each=True)
-        Irecon = utils.make_grid(out_train.data, nrow=8, normalize=True, scale_each=True)
-        writer.add_image('clean image', Img, epoch)
-        writer.add_image('noisy image', Imgn, epoch)
-        writer.add_image('reconstructed image', Irecon, epoch)
         # save model
-        torch.save(model.state_dict(), os.path.join(opt.outf, 'net.pth'))
+        jt.save(model.state_dict(), os.path.join(opt.outf, 'net.pkl'))
 
 if __name__ == "__main__":
     if opt.preprocess:

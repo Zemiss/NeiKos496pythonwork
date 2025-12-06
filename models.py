@@ -1,5 +1,5 @@
-import torch
-import torch.nn as nn
+import jittor as jt
+from jittor import nn
 from utils import weights_init_kaiming
 
 
@@ -14,16 +14,14 @@ class DoubleConv(nn.Module):
         self.double_conv = nn.Sequential(
             nn.Conv2d(in_channels, mid_channels, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(mid_channels),
-            nn.ReLU(inplace=True),
+            nn.ReLU(),
             nn.Conv2d(mid_channels, out_channels, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(out_channels),
 
-            nn.ReLU(inplace=True)
+            nn.ReLU()
         )
 
-    def forward(self, x):
-
-
+    def execute(self, x):
         return self.double_conv(x)
 
 
@@ -37,7 +35,7 @@ class Down(nn.Module):
             DoubleConv(in_channels, out_channels)
         )
 
-    def forward(self, x):
+    def execute(self, x):
         return self.maxpool_conv(x)
 
 
@@ -49,9 +47,9 @@ class Up(nn.Module):
         self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
         self.conv = DoubleConv(in_channels, out_channels, in_channels // 2)
 
-    def forward(self, x1, x2):
+    def execute(self, x1, x2):
         x1 = self.up(x1)
-        x = torch.cat([x2, x1], dim=1)
+        x = jt.concat([x2, x1], dim=1)
         return self.conv(x)
 
 
@@ -61,7 +59,7 @@ class OutConv(nn.Module):
         super(OutConv, self).__init__()
         self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=1)
 
-    def forward(self, x):
+    def execute(self, x):
         return self.conv(x)
 
 
@@ -82,7 +80,7 @@ class UNet(nn.Module):
         self.up3 = Up(128, 64)
         self.outc = OutConv(64, channels)
 
-    def forward(self, x):
+    def execute(self, x):
         x1 = self.inc(x)
         x2 = self.down1(x1)
         x3 = self.down2(x2)
